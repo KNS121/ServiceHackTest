@@ -1,11 +1,13 @@
 package main
 
 import (
+    "bufio"
     "golang.org/x/sys/windows/svc"
     "golang.org/x/sys/windows/svc/debug"
     "log"
     "net"
     "time"
+    "strings"
 )
 
 type ServerServiceHackTest struct {
@@ -68,23 +70,23 @@ loop:
 
 func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
     defer conn.Close()
-    message := "Hello, I am a server"
+    message := "Hello, I am a server\n"
     conn.Write([]byte(message))
-    buf := make([]byte, 1024)
+
+    reader := bufio.NewReader(conn)
     for {
         select {
         case <-m.stopChan:
             log.Println("Closing connection due to stop command")
             return
         default:
-            n, err := conn.Read(buf)
+            data, err := reader.ReadString('\n')
             if err != nil {
                 log.Printf("Error reading from connection: %v", err)
                 return
             }
-            data := string(buf[:n])
             log.Printf("Received data: %s", data)
-            if data == "CLOSE" {
+            if strings.TrimSpace(data) == "CLOSE" {
                 log.Println("Closing connection due to client command")
                 return
             }
