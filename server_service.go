@@ -70,7 +70,6 @@ func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
     defer conn.Close()
     message := "Hello, I am a server"
     conn.Write([]byte(message))
-    // Добавьте логику для обработки данных от клиента, если необходимо
     buf := make([]byte, 1024)
     for {
         select {
@@ -83,7 +82,12 @@ func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
                 log.Printf("Error reading from connection: %v", err)
                 return
             }
-            log.Printf("Received data: %s", buf[:n])
+            data := string(buf[:n])
+            log.Printf("Received data: %s", data)
+            if data == "CLOSE" {
+                log.Println("Closing connection due to client command")
+                return
+            }
         }
     }
 }
