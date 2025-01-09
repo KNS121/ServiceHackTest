@@ -107,7 +107,7 @@ func main() {
 func readFullResponse(conn net.Conn) (string, error) {
     var response strings.Builder
     reader := bufio.NewReader(conn)
-    timeout := 4 * time.Second // Устанавливаем тайм-аут на 2 секунды
+    timeout := 2 * time.Second // Устанавливаем тайм-аут на 2 секунды
     conn.SetReadDeadline(time.Now().Add(timeout))
 
     for {

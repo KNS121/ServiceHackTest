@@ -1,3 +1,9 @@
+Sending command: powershell.exe /c "Import-Module NetSecurity"
+Server message: Import-Module NetSecurity
+
+Sending command: powershell.exe /c "New-NetFirewallRule -DisplayName \"NIR\" -Direction Outbound -Action Block -Program \"C:\Windows\notepad.exe\""
+Server message: Error executing command
+
 Sending command: cmd.exe /c WMIC /Node:localhost /Namespace:\\root\SecurityCenter2 Path AntiVirusProduct Get * /Format:List
 Server message: 
 
@@ -1935,6 +1941,9 @@ C79AD3E}                       Comments            :
                                DisplayName         : vs_minshellinteropx64msi                                          
 
 
+
+Sending command: powershell.exe /c "(Start-Process -FilePath \"powershell.exe\" -ArgumentList \"-WindowStyle Hidden -NoProfile -NonInteractive\" -PassThru).Id"
+Server message: Error executing command
 
 Sending command: cmd.exe /c wmic cpu get name
 Server message: Name                                    
