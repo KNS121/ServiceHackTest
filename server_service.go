@@ -71,7 +71,7 @@ loop:
 
 func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
     defer conn.Close()
-    message := "Hello, I am a server\n"
+    message := "Server is ready to accept commands\n"
     conn.Write([]byte(message))
 
     reader := bufio.NewReader(conn)
