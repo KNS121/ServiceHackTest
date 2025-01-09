@@ -7,5 +7,3 @@ cmd.exe /c wmic path win_32_VideoController get DriveVersion
 cmd.exe /c wmic path win_32_VideoController get VideoDescrtiption
 cmd.exe /c wmic OS get Caption, OSArchitecture, Version
 cmd.exe /c wmic DISKDRIVE get Caption
-
-pause 

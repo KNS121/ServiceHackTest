@@ -1,0 +1,33 @@
+Отправка команды: cmd.exe /c WMIC /Node:localhost /Namespace:\\root\SecurityCenter2 Path AntiVirusProduct Get * /Format:List
+Получено с сервера: Hello, I am a server
+
+Отправка команды: powershell.exe  /c (Get-ChildItem -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall")
+Получено с сервера: 
+
+Отправка команды: cmd.exe /c wmic cpu get name
+Получено с сервера: 
+
+Отправка команды: cmd.exe /c MEMPHYSICAL get MaxCapacity
+Получено с сервера:                   VersionMajor    : 16                                                                    
+
+Отправка команды: cmd.exe /c wmic baseboard get product
+Получено с сервера:    
+
+Отправка команды: cmd.exe /c wmic bios get SMBIOSBIOSVersion
+Получено с сервера: .com/git-for-windows/
+
+Отправка команды: cmd.exe /c wmic path win_32_VideoController get name
+Получено с сервера: uninstall\bin\win64\uninstall.exe C:\Pr
+
+Отправка команды: cmd.exe /c wmic path win_32_VideoController get DriveVersion
+Получено с сервера:      : 7168                                              
+
+Отправка команды: cmd.exe /c wmic path win_32_VideoController get VideoDescrtiption
+Получено с сервера: n_greek                : 0                                                 
+
+Отправка команды: cmd.exe /c wmic OS get Caption, OSArchitecture, Version
+Получено с сервера:      MementoSection_slovenian            : 0                                                 
+
+Отправка команды: cmd.exe /c wmic DISKDRIVE get Caption
+Получено с сервера:                        MementoSection_TeX                  : 1                                                 
+
