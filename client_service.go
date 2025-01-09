@@ -7,34 +7,52 @@ import (
     "os"
     "path/filepath"
     "strings"
+    "time"
 )
 
 func main() {
     // Подключаемся к серверу
     conn, err := net.Dial("tcp", "localhost:4545")
     if err != nil {
-        fmt.Println("Ошибка подключения:", err)
+        fmt.Println("Connection error:", err)
         return
     }
     defer func() {
         if err := conn.Close(); err != nil {
-            fmt.Println("Ошибка закрытия соединения:", err)
+            fmt.Println("Close connection error:", err)
         }
     }()
 
-    // Определяем папку с .bat файлами (относительный путь)
-    directory := "batfiles"
+    // Отправляем команду пинг на сервер
+    pingCommand := "ping"
+    //fmt.Println(":", pingCommand)
+    _, err = conn.Write([]byte(pingCommand + "\n"))
+    if err != nil {
+        fmt.Println("Error of ping:", err)
+        return
+    }
+
+    // Ждем ответа на команду пинг
+    pingResponse, err := readFullResponse(conn)
+    if err != nil {
+        fmt.Println("Error read server message:", err)
+        return
+    }
+    fmt.Println("Get server message ping:", pingResponse)
 
     // Открываем лог-файл для записи
     logFile, err := os.Create("log.txt")
     if err != nil {
-        fmt.Println("Ошибка создания лог-файла:", err)
+        fmt.Println("Error creation log file:", err)
         return
     }
     defer logFile.Close()
 
     logWriter := bufio.NewWriter(logFile)
     defer logWriter.Flush()
+
+    // Определяем папку с .bat файлами (относительный путь)
+    directory := "batfiles"
 
     // Итерируемся по файлам в папке
     err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
@@ -45,7 +63,7 @@ func main() {
             // Открываем .bat файл для чтения
             file, err := os.Open(path)
             if err != nil {
-                fmt.Println("Ошибка открытия файла:", err)
+                fmt.Println("Error open bat file:", err)
                 return nil
             }
             defer file.Close()
@@ -54,51 +72,54 @@ func main() {
             scanner := bufio.NewScanner(file)
             for scanner.Scan() {
                 command := scanner.Text()
-                fmt.Println("Отправка команды:", command)
-                logWriter.WriteString(fmt.Sprintf("Отправка команды: %s\n", command))
+                fmt.Println("Sending command:", command)
+                logWriter.WriteString(fmt.Sprintf("Sending command: %s\n", command))
 
                 _, err = conn.Write([]byte(command + "\n"))
                 if err != nil {
-                    fmt.Println("Ошибка записи на сервер:", err)
+                    fmt.Println("Error server command:", err)
                     return nil
                 }
 
                 // Ждем полного ответа от сервера
                 response, err := readFullResponse(conn)
                 if err != nil {
-                    fmt.Println("Ошибка чтения с сервера:", err)
+                    fmt.Println("Error read server message:", err)
                     return nil
                 }
-                fmt.Println("Получено с сервера:", response)
-                logWriter.WriteString(fmt.Sprintf("Получено с сервера: %s\n", response))
+                fmt.Println("Server message:", response)
+                logWriter.WriteString(fmt.Sprintf("Server message: %s\n", response))
             }
 
             if err := scanner.Err(); err != nil {
-                fmt.Println("Ошибка чтения файла:", err)
+                fmt.Println("Error reading file:", err)
             }
         }
         return nil
     })
 
     if err != nil {
-        fmt.Println("Ошибка при обходе папки:", err)
+        fmt.Println("Error catalog:", err)
     }
 }
 
-// Функция для чтения полного ответа от сервера
+// Функция для чтения полного ответа от сервера с тайм-аутом
 func readFullResponse(conn net.Conn) (string, error) {
     var response strings.Builder
     reader := bufio.NewReader(conn)
+    timeout := 4 * time.Second // Устанавливаем тайм-аут на 2 секунды
+    conn.SetReadDeadline(time.Now().Add(timeout))
+
     for {
         line, err := reader.ReadString('\n')
         if err != nil {
+            if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+                // Тайм-аут истек, считаем, что ответ завершен
+                break
+            }
             return "", err
         }
         response.WriteString(line)
-        // Проверяем, что ответ завершен (например, по наличию определенного маркера)
-        if strings.HasSuffix(line, "\n") {
-            break
-        }
     }
     return response.String(), nil
 }
