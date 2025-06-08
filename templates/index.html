@@ -6,7 +6,11 @@
     <title>Batch Commands Manager</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .card { margin-bottom: 20px; transition: transform 0.2s; }
+        .card { 
+            margin-bottom: 20px; 
+            transition: transform 0.2s; 
+            cursor: pointer;
+        }
         .card:hover { transform: scale(1.02); }
         .output { 
             background: #1e1e1e; 
@@ -23,6 +27,35 @@
             margin: 10px 0;
             height: 25px;
         }
+        .status-badge { 
+            padding: 3px 8px; 
+            border-radius: 12px;
+            font-size: 0.8rem;
+            display: inline-block;
+        }
+        .status-success { background-color: #d4edda; color: #155724; }
+        .status-failed { background-color: #f8d7da; color: #721c24; }
+        .history-item { transition: all 0.3s; }
+        .history-item:hover { background-color: #f8f9fa; }
+        .results-table th {
+            background-color: #e9ecef;
+        }
+        .timestamp-col {
+            width: 180px;
+        }
+        .action-col {
+            width: 120px;
+        }
+        .log-modal .modal-content {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .log-modal .modal-header {
+            border-bottom: 1px solid #444;
+        }
+        .log-modal .btn-close {
+            filter: invert(1);
+        }
     </style>
 </head>
 <body>
@@ -32,6 +65,7 @@
         <div class="d-flex justify-content-between mb-3">
             <button id="selectAllBtn" class="btn btn-outline-primary">Select All</button>
             <button id="runSelectedBtn" class="btn btn-success">Run Selected</button>
+            <button id="historyBtn" class="btn btn-info">Show History</button>
         </div>
         
         <div class="row" id="batContainer">
@@ -47,12 +81,88 @@
         <div class="row mt-4">
             <div class="col">
                 <div class="card">
-                    <div class="card-header bg-info text-white">
-                        Command Output
+                    <div class="card-header bg-info text-white d-flex justify-content-between">
+                        <span>Execution Output</span>
+                        <button id="clearOutputBtn" class="btn btn-sm btn-light">Clear</button>
                     </div>
                     <div class="card-body">
                         <pre id="output" class="output">Select commands to run...</pre>
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        Execution Results
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped table-hover results-table">
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th>Status</th>
+                                    <th class="timestamp-col">Time</th>
+                                    <th class="action-col">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsBody">
+                                <!-- Results will be added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Run History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyBody">
+                                <!-- History will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div class="modal fade log-modal" id="logModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Command Output</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="logContent" class="output"></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -61,35 +171,54 @@
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script>
         let selectedFiles = [];
+        let runResults = [];
         
         async function loadBatFiles() {
-            const response = await fetch('/list');
-            const data = await response.text();
-            return data.split('|');
+            try {
+                const response = await fetch('/list');
+                const data = await response.text();
+                return data.split('|');
+            } catch (error) {
+                console.error('Error loading bat files:', error);
+                showOutput(`Error loading batch files: ${error.message}`);
+                return [];
+            }
         }
 
         function createCard(file) {
             const col = document.createElement('div');
-            col.className = 'col-md-4';
+            col.className = 'col-md-4 mb-3';
             
             col.innerHTML = `
-                <div class="card shadow-sm" data-file="${file}">
-                    <div class="card-body">
-                        <div class="form-check">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="form-check flex-grow-1">
                             <input class="form-check-input" type="checkbox" id="check-${file}" value="${file}">
-                            <label class="form-check-label" for="check-${file}">${file}</label>
+                            <label class="form-check-label ms-2" for="check-${file}">${file}</label>
                         </div>
                     </div>
                 </div>
             `;
             
-            col.querySelector('.form-check-input').addEventListener('change', function() {
+            const checkbox = col.querySelector('.form-check-input');
+            const card = col.querySelector('.card');
+            
+            // Handle card click
+            card.addEventListener('click', (e) => {
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+            
+            // Handle checkbox change
+            checkbox.addEventListener('change', function() {
                 if (this.checked) {
                     selectedFiles.push(file);
-                    col.querySelector('.card').classList.add('selected');
+                    card.classList.add('selected');
                 } else {
                     selectedFiles = selectedFiles.filter(f => f !== file);
-                    col.querySelector('.card').classList.remove('selected');
+                    card.classList.remove('selected');
                 }
                 updateRunButton();
             });
@@ -108,17 +237,72 @@
             }
         }
 
+        function showOutput(message) {
+            const outputEl = document.getElementById('output');
+            outputEl.textContent += message + '\n';
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+
+        function addResultToTable(file, success, timestamp, logFile) {
+            const resultsBody = document.getElementById('resultsBody');
+            const row = document.createElement('tr');
+            row.className = 'history-item';
+            
+            const timeStr = new Date(timestamp).toLocaleString();
+            
+            row.innerHTML = `
+                <td>${file}</td>
+                <td>
+                    <span class="status-badge ${success ? 'status-success' : 'status-failed'}">
+                        ${success ? 'Success' : 'Failed'}
+                    </span>
+                </td>
+                <td>${timeStr}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary view-log-btn" data-log="${logFile}">
+                        View Log
+                    </button>
+                </td>
+            `;
+            
+            resultsBody.insertBefore(row, resultsBody.firstChild);
+            
+            // Add event listener to the view log button
+            row.querySelector('.view-log-btn').addEventListener('click', function() {
+                viewLog(this.getAttribute('data-log'));
+            });
+        }
+
+        async function viewLog(logFile) {
+            try {
+                const response = await fetch(`/result?file=${encodeURIComponent(logFile)}`);
+                const logContent = await response.text();
+                
+                document.getElementById('logContent').textContent = logContent;
+                const logModal = new bootstrap.Modal(document.getElementById('logModal'));
+                logModal.show();
+            } catch (error) {
+                showOutput(`Error loading log: ${error.message}`);
+            }
+        }
+
         async function runSelected() {
             if (selectedFiles.length === 0) {
-                document.getElementById('output').textContent = "No files selected!";
+                showOutput("No files selected!");
                 return;
             }
             
             const outputEl = document.getElementById('output');
             const progressBar = document.getElementById('progressBar');
+            
+            // Clear previous output if needed
             outputEl.textContent = `Running ${selectedFiles.length} files...\n`;
             
-            // Сброс прогресс-бара
+            // Reset progress bar
             progressBar.style.width = '0%';
             progressBar.textContent = '0%';
             
@@ -127,57 +311,140 @@
             
             for (const file of selectedFiles) {
                 try {
-                    outputEl.textContent += `\n--- Starting: ${file} ---\n`;
-                    const response = await fetch(`/run?file=${encodeURIComponent(file)}`);
-                    const result = await response.text();
-                    outputEl.textContent += result + '\n';
-                    outputEl.textContent += `--- Completed: ${file} ---\n`;
+                    showOutput(`--- Starting: ${file} ---`);
                     
-                    // Обновление прогресса
+                    const startTime = new Date();
+                    const response = await fetch(`/run?file=${encodeURIComponent(file)}`);
+                    const result = await response.json();
+                    
+                    showOutput(result.output);
+                    showOutput(`--- Completed: ${file} (${result.success ? 'Success' : 'Failed'}) ---`);
+                    
+                    // Add to results table
+                    addResultToTable(
+                        file, 
+                        result.success, 
+                        startTime, 
+                        result.log_file
+                    );
+                    
+                    // Update progress
                     completed++;
                     const percent = Math.round((completed / total) * 100);
                     progressBar.style.width = `${percent}%`;
                     progressBar.textContent = `${percent}%`;
                     
-                    // Прокрутка к последнему выводу
-                    outputEl.scrollTop = outputEl.scrollHeight;
                 } catch (error) {
-                    outputEl.textContent += `Error running ${file}: ${error.message}\n`;
+                    showOutput(`Error running ${file}: ${error.message}`);
+                    
+                    // Add error result to table
+                    addResultToTable(
+                        file, 
+                        false, 
+                        new Date(), 
+                        'error.log'
+                    );
                 }
             }
             
-            outputEl.textContent += `\nCompleted all ${selectedFiles.length} files!`;
+            showOutput(`\nCompleted all ${selectedFiles.length} files!`);
+            selectedFiles = [];
+            updateRunButton();
+            
+            // Uncheck all checkboxes
+            document.querySelectorAll('.form-check-input').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.closest('.card').classList.remove('selected');
+            });
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history');
+                const history = await response.json();
+                const historyBody = document.getElementById('historyBody');
+                
+                historyBody.innerHTML = '';
+                
+                if (history.length === 0) {
+                    historyBody.innerHTML = `<tr><td colspan="4" class="text-center">No history available</td></tr>`;
+                    return;
+                }
+                
+                history.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = 'history-item';
+                    
+                    const timestamp = new Date(item.timestamp);
+                    const timeStr = timestamp.toLocaleString();
+                    
+                    row.innerHTML = `
+                        <td>${item.filename}</td>
+                        <td>
+                            <span class="status-badge ${item.success ? 'status-success' : 'status-failed'}">
+                                ${item.success ? 'Success' : 'Failed'}
+                            </span>
+                        </td>
+                        <td>${timeStr}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary view-log-btn" data-log="${item.output_path}">
+                                View Log
+                            </button>
+                        </td>
+                    `;
+                    
+                    historyBody.appendChild(row);
+                    
+                    // Add event listener to the view log button
+                    row.querySelector('.view-log-btn').addEventListener('click', function() {
+                        viewLog(this.getAttribute('data-log'));
+                    });
+                });
+                
+                const historyModal = new bootstrap.Modal(document.getElementById('historyModal'));
+                historyModal.show();
+                
+            } catch (error) {
+                showOutput(`Error loading history: ${error.message}`);
+            }
         }
 
         async function init() {
-            const files = await loadBatFiles();
-            const container = document.getElementById('batContainer');
-            
-            files.forEach(file => {
-                container.appendChild(createCard(file));
-            });
-            
-            // Кнопка "Выбрать все"
-            document.getElementById('selectAllBtn').addEventListener('click', function() {
-                selectedFiles = [];
-                const checkboxes = document.querySelectorAll('.form-check-input');
-                const cards = document.querySelectorAll('.card');
+            try {
+                const files = await loadBatFiles();
+                const container = document.getElementById('batContainer');
                 
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = true;
-                    selectedFiles.push(checkbox.value);
+                files.forEach(file => {
+                    container.appendChild(createCard(file));
                 });
                 
-                cards.forEach(card => {
-                    card.classList.add('selected');
+                // Select All button
+                document.getElementById('selectAllBtn').addEventListener('click', function() {
+                    selectedFiles = [];
+                    
+                    document.querySelectorAll('.form-check-input').forEach(checkbox => {
+                        checkbox.checked = true;
+                        selectedFiles.push(checkbox.value);
+                        checkbox.closest('.card').classList.add('selected');
+                    });
+                    
+                    updateRunButton();
                 });
+                
+                // Run Selected button
+                document.getElementById('runSelectedBtn').addEventListener('click', runSelected);
+                
+                // History button
+                document.getElementById('historyBtn').addEventListener('click', loadHistory);
+                
+                // Clear output button
+                document.getElementById('clearOutputBtn').addEventListener('click', clearOutput);
                 
                 updateRunButton();
-            });
-            
-            // Кнопка "Выполнить выбранное"
-            document.getElementById('runSelectedBtn').addEventListener('click', runSelected);
-            updateRunButton();
+                
+            } catch (error) {
+                showOutput(`Initialization error: ${error.message}`);
+            }
         }
 
         // Initialize on load

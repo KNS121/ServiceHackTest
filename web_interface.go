@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
 //go:embed templates/*
@@ -29,19 +33,84 @@ type BatFile struct {
 type PageData struct {
 	Title   string
 	BatFiles []BatFile
+	History []RunHistory
 }
 
+type RunHistory struct {
+	ID        int
+	Filename  string
+	Success   bool
+	Timestamp time.Time
+	Output    string
+}
+
+type RunResult struct {
+	Filename  string
+	Success   bool
+	Output    string
+	Timestamp time.Time
+}
+
+var db *sql.DB
+
 func main() {
+	initDB()
+	defer db.Close()
+
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/run", runHandler)
 	http.HandleFunc("/list", listHandler)
+	http.HandleFunc("/history", historyHandler)
+	http.HandleFunc("/result", resultHandler)
 	
 	// Serve static files from embedded FS
 	staticSubFS, _ := fs.Sub(staticFS, "static")
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSubFS))))
 
+	// Create results directory
+	os.Mkdir("results", 0755)
+
 	log.Println("Starting web server at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func initDB() {
+	var err error
+	connStr := "postgres://postgres:postgres@localhost:5432/batches?sslmode=disable"
+	// Try to connect with retries
+	for i := 0; i < 5; i++ {
+		db, err = sql.Open("postgres", connStr)
+		if err != nil {
+			log.Printf("DB connection error: %v, retrying...", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		
+		err = db.Ping()
+		if err == nil {
+			break
+		}
+		log.Printf("DB ping error: %v, retrying...", err)
+		time.Sleep(2 * time.Second)
+	}
+	
+	if err != nil {
+		log.Fatal("Failed to connect to database:", err)
+	}
+
+	// Create table if not exists
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS run_history (
+			id SERIAL PRIMARY KEY,
+			filename TEXT NOT NULL,
+			success BOOLEAN NOT NULL,
+			timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			output_path TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		log.Fatal("Failed to create table:", err)
+	}
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -83,23 +152,52 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
-	// Разрешаем запросы с любого источника
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	
-	file := r.URL.Query().Get("file")
-	if file == "" {
-		http.Error(w, "Missing file parameter", http.StatusBadRequest)
-		return
-	}
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Content-Type", "application/json") // Добавьте это
 
-	output, err := RunBatFile(filepath.Join("batfiles", file))
-	if err != nil {
-		http.Error(w, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    file := r.URL.Query().Get("file")
+    if file == "" {
+        // Возвращаем JSON вместо HTML
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(map[string]string{"error": "Missing file parameter"})
+        return
+    }
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(output))
+    output, success, err := RunBatFile(filepath.Join("batfiles", file))
+    if err != nil {
+        // Возвращаем JSON вместо HTML
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(map[string]string{
+            "error": "Error: " + err.Error(),
+            "success": "false",
+        })
+        return
+    }
+
+    // Save result to file
+    timestamp := time.Now().Format("20060102_150405")
+    resultFilename := fmt.Sprintf("%s_%s.log", timestamp, strings.TrimSuffix(file, ".bat"))
+    resultPath := filepath.Join("results", resultFilename)
+    
+    if err := os.WriteFile(resultPath, []byte(output), 0644); err != nil {
+        log.Printf("Failed to save result: %v", err)
+    }
+
+    // Save to database
+    _, err = db.Exec(
+        "INSERT INTO run_history (filename, success, output_path) VALUES ($1, $2, $3)",
+        file, success, resultFilename,
+    )
+    if err != nil {
+        log.Printf("Failed to save to DB: %v", err)
+    }
+
+    // Return result with success status
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "success": success,
+        "output":  output,
+        "log_file": resultFilename,
+    })
 }
 
 func getBatFiles(dir string) ([]BatFile, error) {
@@ -118,34 +216,38 @@ func getBatFiles(dir string) ([]BatFile, error) {
 	return batFiles, nil
 }
 
-func RunBatFile(filePath string) (string, error) {
+func RunBatFile(filePath string) (string, bool, error) {
+	
+	
+	
 	var output strings.Builder
+	success := true // Assume success until error
+
 	log.Printf("Running bat file: %s", filePath)
 
 	conn, err := net.Dial("tcp", "localhost:4545")
 	if err != nil {
-		return "", fmt.Errorf("connection error: %w", err)
+		return "", false, fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
 
-	// Увеличим таймаут
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	// Ping server
 	if _, err := conn.Write([]byte("ping\n")); err != nil {
-		return "", fmt.Errorf("ping error: %w", err)
+		return "", false, fmt.Errorf("ping error: %w", err)
 	}
 
 	pingResp, err := readFullResponse(conn)
 	if err != nil {
-		return "", fmt.Errorf("ping read error: %w", err)
+		return "", false, fmt.Errorf("ping read error: %w", err)
 	}
 	output.WriteString("PING RESPONSE: " + pingResp + "\n")
 
 	// Open bat file
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("file open error: %w", err)
+		return "", false, fmt.Errorf("file open error: %w", err)
 	}
 	defer file.Close()
 
@@ -155,17 +257,58 @@ func RunBatFile(filePath string) (string, error) {
 		output.WriteString("SENDING: " + cmd + "\n")
 
 		if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
-			return output.String(), fmt.Errorf("command send error: %w", err)
+			return output.String(), false, fmt.Errorf("command send error: %w", err)
 		}
 
 		resp, err := readFullResponse(conn)
 		if err != nil {
-			return output.String(), fmt.Errorf("response error: %w", err)
+			return output.String(), false, fmt.Errorf("response error: %w", err)
 		}
+		
 		output.WriteString("RESPONSE: " + resp + "\n")
+		
+		// Check for error in response
+		if strings.Contains(resp, "Error executing command") {
+			success = false
+		}
 	}
 
-	return output.String(), nil
+	return output.String(), success, nil
+}
+
+func historyHandler(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT id, filename, success, timestamp, output_path FROM run_history ORDER BY timestamp DESC LIMIT 50")
+	if err != nil {
+		http.Error(w, "DB error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var history []RunHistory
+	for rows.Next() {
+		var h RunHistory
+		var timestamp time.Time
+		err := rows.Scan(&h.ID, &h.Filename, &h.Success, &timestamp, &h.Output)
+		if err != nil {
+			log.Printf("Error scanning history row: %v", err)
+			continue
+		}
+		h.Timestamp = timestamp
+		history = append(history, h)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
+}
+
+func resultHandler(w http.ResponseWriter, r *http.Request) {
+	file := r.URL.Query().Get("file")
+	if file == "" {
+		http.Error(w, "Missing file parameter", http.StatusBadRequest)
+		return
+	}
+
+	http.ServeFile(w, r, filepath.Join("results", file))
 }
 
 func readFullResponse(conn net.Conn) (string, error) {
