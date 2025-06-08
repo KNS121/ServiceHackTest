@@ -1,125 +1,78 @@
 package main
 
 import (
-    "bufio"
-    "fmt"
-    "net"
-    "os"
-    "path/filepath"
-    "strings"
-    "time"
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
-func main() {
-    // Подключаемся к серверу
-    conn, err := net.Dial("tcp", "localhost:4545")
-    if err != nil {
-        fmt.Println("Connection error:", err)
-        return
-    }
-    defer func() {
-        if err := conn.Close(); err != nil {
-            fmt.Println("Close connection error:", err)
-        }
-    }()
+func RunBatFile(filePath string) (string, error) {
+	var output strings.Builder
 
-    // Отправляем команду пинг на сервер
-    pingCommand := "ping"
-    //fmt.Println(":", pingCommand)
-    _, err = conn.Write([]byte(pingCommand + "\n"))
-    if err != nil {
-        fmt.Println("Error of ping:", err)
-        return
-    }
+	conn, err := net.Dial("tcp", "localhost:4545")
+	if err != nil {
+		return "", fmt.Errorf("connection error: %w", err)
+	}
+	defer conn.Close()
 
-    // Ждем ответа на команду пинг
-    pingResponse, err := readFullResponse(conn)
-    if err != nil {
-        fmt.Println("Error read server message:", err)
-        return
-    }
-    fmt.Println("Get server message ping:", pingResponse)
+	// Ping server
+	if _, err := conn.Write([]byte("ping\n")); err != nil {
+		return "", fmt.Errorf("ping error: %w", err)
+	}
 
-    // Открываем лог-файл для записи
-    logFile, err := os.Create("log.txt")
-    if err != nil {
-        fmt.Println("Error creation log file:", err)
-        return
-    }
-    defer logFile.Close()
+	pingResp, err := readFullResponse(conn)
+	if err != nil {
+		return "", fmt.Errorf("ping read error: %w", err)
+	}
+	output.WriteString("PING RESPONSE: " + pingResp + "\n")
 
-    logWriter := bufio.NewWriter(logFile)
-    defer logWriter.Flush()
+	// Open bat file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("file open error: %w", err)
+	}
+	defer file.Close()
 
-    // Определяем папку с .bat файлами (относительный путь)
-    directory := "batfiles"
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		cmd := scanner.Text()
+		output.WriteString("SENDING: " + cmd + "\n")
 
-    // Итерируемся по файлам в папке
-    err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        if !info.IsDir() && filepath.Ext(path) == ".bat" {
-            // Открываем .bat файл для чтения
-            file, err := os.Open(path)
-            if err != nil {
-                fmt.Println("Error open bat file:", err)
-                return nil
-            }
-            defer file.Close()
+		if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
+			return output.String(), fmt.Errorf("command send error: %w", err)
+		}
 
-            // Читаем команды из файла и отправляем их на сервер
-            scanner := bufio.NewScanner(file)
-            for scanner.Scan() {
-                command := scanner.Text()
-                fmt.Println("Sending command:", command)
-                logWriter.WriteString(fmt.Sprintf("Sending command: %s\n", command))
+		resp, err := readFullResponse(conn)
+		if err != nil {
+			return output.String(), fmt.Errorf("response error: %w", err)
+		}
+		output.WriteString("RESPONSE: " + resp + "\n")
+	}
 
-                _, err = conn.Write([]byte(command + "\n"))
-                if err != nil {
-                    fmt.Println("Error server command:", err)
-                    return nil
-                }
-
-                // Ждем полного ответа от сервера
-                response, err := readFullResponse(conn)
-                if err != nil {
-                    fmt.Println("Error read server message:", err)
-                    return nil
-                }
-                fmt.Println("Server message:", response)
-                logWriter.WriteString(fmt.Sprintf("Server message: %s\n", response))
-            }
-
-            if err := scanner.Err(); err != nil {
-                fmt.Println("Error reading file:", err)
-            }
-        }
-        return nil
-    })
-
-    if err != nil {
-        fmt.Println("Error catalog:", err)
-    }
+	return output.String(), nil
 }
 
-// Функция для чтения полного ответа от сервера с тайм-аутом
 func readFullResponse(conn net.Conn) (string, error) {
-    var response strings.Builder
-    reader := bufio.NewReader(conn)
-    timeout := 2 * time.Second // Устанавливаем тайм-аут на 2 секунды
-    conn.SetReadDeadline(time.Now().Add(timeout))
+	var sb strings.Builder
+	reader := bufio.NewReader(conn)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
-    for {
-        line, err := reader.ReadString('\n')
-        if err != nil {
-            if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-                // Тайм-аут истек, считаем, что ответ завершен
-                break
-            }
-            return "", err
-        }
-        response.WriteString(line)
-    }
-    return response.String(), nil
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				break
+			}
+			return sb.String(), err
+		}
+		sb.WriteString(line)
+		if strings.Contains(line, "END_OF_RESPONSE") {
+			break
+		}
+	}
+	return sb.String(), nil
 }
