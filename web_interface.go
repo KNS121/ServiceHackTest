@@ -68,9 +68,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
 	batFiles, err := getBatFiles("batfiles")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -86,9 +83,9 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
-
+	// Разрешаем запросы с любого источника
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-
+	
 	file := r.URL.Query().Get("file")
 	if file == "" {
 		http.Error(w, "Missing file parameter", http.StatusBadRequest)
@@ -121,15 +118,18 @@ func getBatFiles(dir string) ([]BatFile, error) {
 	return batFiles, nil
 }
 
-// Добавленная функция для выполнения .bat файла
 func RunBatFile(filePath string) (string, error) {
 	var output strings.Builder
+	log.Printf("Running bat file: %s", filePath)
 
 	conn, err := net.Dial("tcp", "localhost:4545")
 	if err != nil {
 		return "", fmt.Errorf("connection error: %w", err)
 	}
 	defer conn.Close()
+
+	// Увеличим таймаут
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	// Ping server
 	if _, err := conn.Write([]byte("ping\n")); err != nil {
@@ -168,12 +168,12 @@ func RunBatFile(filePath string) (string, error) {
 	return output.String(), nil
 }
 
-// Функция для чтения полного ответа от сервера
 func readFullResponse(conn net.Conn) (string, error) {
 	var sb strings.Builder
 	reader := bufio.NewReader(conn)
+	
+	// Читаем до таймаута или конца потока данных
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -183,6 +183,12 @@ func readFullResponse(conn net.Conn) (string, error) {
 			return sb.String(), err
 		}
 		sb.WriteString(line)
+		
+		// Если сервер возвращает маркер конца ответа
+		if strings.Contains(line, "END_OF_RESPONSE") {
+			break
+		}
 	}
+	
 	return sb.String(), nil
 }

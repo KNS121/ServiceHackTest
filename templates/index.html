@@ -18,14 +18,30 @@
             overflow-y: auto;
             white-space: pre-wrap;
         }
+        .selected { border: 2px solid #0d6efd !important; }
+        .progress-container {
+            margin: 10px 0;
+            height: 25px;
+        }
     </style>
 </head>
 <body>
     <div class="container py-4">
         <h1 class="text-center mb-4">Batch Commands Manager</h1>
         
+        <div class="d-flex justify-content-between mb-3">
+            <button id="selectAllBtn" class="btn btn-outline-primary">Select All</button>
+            <button id="runSelectedBtn" class="btn btn-success">Run Selected</button>
+        </div>
+        
         <div class="row" id="batContainer">
             <!-- Cards will be dynamically inserted here -->
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress" style="height: 25px;">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
         </div>
         
         <div class="row mt-4">
@@ -35,7 +51,7 @@
                         Command Output
                     </div>
                     <div class="card-body">
-                        <pre id="output" class="output">Select a command to run...</pre>
+                        <pre id="output" class="output">Select commands to run...</pre>
                     </div>
                 </div>
             </div>
@@ -44,22 +60,12 @@
 
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script>
+        let selectedFiles = [];
+        
         async function loadBatFiles() {
             const response = await fetch('/list');
             const data = await response.text();
             return data.split('|');
-        }
-
-        async function runCommand(file) {
-            document.getElementById('output').textContent = `Running ${file}...`;
-            
-            try {
-                const response = await fetch(`/run?file=${encodeURIComponent(file)}`);
-                const output = await response.text();
-                document.getElementById('output').textContent = output;
-            } catch (error) {
-                document.getElementById('output').textContent = `Error: ${error.message}`;
-            }
         }
 
         function createCard(file) {
@@ -67,17 +73,80 @@
             col.className = 'col-md-4';
             
             col.innerHTML = `
-                <div class="card shadow-sm">
-                    <div class="card-body text-center">
-                        <h5 class="card-title">${file}</h5>
-                        <button onclick="runCommand('${file}')" class="btn btn-primary">
-                            Run Command
-                        </button>
+                <div class="card shadow-sm" data-file="${file}">
+                    <div class="card-body">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check-${file}" value="${file}">
+                            <label class="form-check-label" for="check-${file}">${file}</label>
+                        </div>
                     </div>
                 </div>
             `;
             
+            col.querySelector('.form-check-input').addEventListener('change', function() {
+                if (this.checked) {
+                    selectedFiles.push(file);
+                    col.querySelector('.card').classList.add('selected');
+                } else {
+                    selectedFiles = selectedFiles.filter(f => f !== file);
+                    col.querySelector('.card').classList.remove('selected');
+                }
+                updateRunButton();
+            });
+            
             return col;
+        }
+
+        function updateRunButton() {
+            const btn = document.getElementById('runSelectedBtn');
+            if (selectedFiles.length > 0) {
+                btn.disabled = false;
+                btn.textContent = `Run Selected (${selectedFiles.length})`;
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Run Selected';
+            }
+        }
+
+        async function runSelected() {
+            if (selectedFiles.length === 0) {
+                document.getElementById('output').textContent = "No files selected!";
+                return;
+            }
+            
+            const outputEl = document.getElementById('output');
+            const progressBar = document.getElementById('progressBar');
+            outputEl.textContent = `Running ${selectedFiles.length} files...\n`;
+            
+            // Сброс прогресс-бара
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            
+            let completed = 0;
+            const total = selectedFiles.length;
+            
+            for (const file of selectedFiles) {
+                try {
+                    outputEl.textContent += `\n--- Starting: ${file} ---\n`;
+                    const response = await fetch(`/run?file=${encodeURIComponent(file)}`);
+                    const result = await response.text();
+                    outputEl.textContent += result + '\n';
+                    outputEl.textContent += `--- Completed: ${file} ---\n`;
+                    
+                    // Обновление прогресса
+                    completed++;
+                    const percent = Math.round((completed / total) * 100);
+                    progressBar.style.width = `${percent}%`;
+                    progressBar.textContent = `${percent}%`;
+                    
+                    // Прокрутка к последнему выводу
+                    outputEl.scrollTop = outputEl.scrollHeight;
+                } catch (error) {
+                    outputEl.textContent += `Error running ${file}: ${error.message}\n`;
+                }
+            }
+            
+            outputEl.textContent += `\nCompleted all ${selectedFiles.length} files!`;
         }
 
         async function init() {
@@ -87,6 +156,28 @@
             files.forEach(file => {
                 container.appendChild(createCard(file));
             });
+            
+            // Кнопка "Выбрать все"
+            document.getElementById('selectAllBtn').addEventListener('click', function() {
+                selectedFiles = [];
+                const checkboxes = document.querySelectorAll('.form-check-input');
+                const cards = document.querySelectorAll('.card');
+                
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = true;
+                    selectedFiles.push(checkbox.value);
+                });
+                
+                cards.forEach(card => {
+                    card.classList.add('selected');
+                });
+                
+                updateRunButton();
+            });
+            
+            // Кнопка "Выполнить выбранное"
+            document.getElementById('runSelectedBtn').addEventListener('click', runSelected);
+            updateRunButton();
         }
 
         // Initialize on load
