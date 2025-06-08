@@ -68,6 +68,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	batFiles, err := getBatFiles("batfiles")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -83,6 +86,9 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	file := r.URL.Query().Get("file")
 	if file == "" {
 		http.Error(w, "Missing file parameter", http.StatusBadRequest)
