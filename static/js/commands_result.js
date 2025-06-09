@@ -118,8 +118,13 @@ async function viewLog(logFile) {
 async function runSelected() {
 
     const hostSelect = document.getElementById('hostSelect');
+    const selectedOption = hostSelect.options[hostSelect.selectedIndex];
     const selectedHost = hostSelect.value;
 
+    if (selectedOption.disabled) {
+        showOutput(`Cannot run on inactive host: ${selectedHost}`);
+        return;
+    }
 
     if (selectedFiles.length === 0) {
         showOutput("No files selected!");
@@ -269,36 +274,40 @@ async function loadHosts() {
         const hosts = await response.json();
         const hostSelect = document.getElementById('hostSelect');
         
-        // Сохраняем текущее значение
         const currentValue = hostSelect.value;
-        
-        // Очищаем все опции кроме localhost
-        const optionsToKeep = [];
-        for (let i = 0; i < hostSelect.options.length; i++) {
-            if (hostSelect.options[i].value === "localhost") {
-                optionsToKeep.push(hostSelect.options[i]);
-            }
-        }
-        
         hostSelect.innerHTML = '';
-        optionsToKeep.forEach(opt => hostSelect.appendChild(opt));
+        
+        // Добавляем localhost (всегда активен)
+        const localhostOption = document.createElement('option');
+        localhostOption.value = "localhost";
+        localhostOption.textContent = "localhost 🟢 Active";
+        hostSelect.appendChild(localhostOption);
         
         // Добавляем хосты из базы
         hosts.forEach(host => {
             const option = document.createElement('option');
             option.value = host.ip_address;
             
-            // Добавляем статус
-            const status = host.status === 'active' ? '🟢 Active' : '🔴 Inactive';
+            // Добавляем статус и блокируем неактивные
+            const isActive = host.status === 'active';
+            const status = isActive ? '🟢 Active' : '🔴 Inactive';
             option.textContent = `${host.name} (${host.ip_address}) - ${status}`;
             
-            // Восстанавливаем выбранное значение
-            if (host.ip_address === currentValue) {
+            if (!isActive) {
+                option.disabled = true;
+            }
+            
+            if (host.ip_address === currentValue && isActive) {
                 option.selected = true;
             }
             
             hostSelect.appendChild(option);
         });
+        
+        // Восстанавливаем выбор если нужно
+        if (hostSelect.value !== currentValue) {
+            hostSelect.value = "localhost";
+        }
         
     } catch (error) {
         console.error('Error loading hosts:', error);
