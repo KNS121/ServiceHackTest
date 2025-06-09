@@ -1,0 +1,9 @@
+PING RESPONSE: PONG
+pong
+
+SENDING: cmd.exe /c wmic DISKDRIVE get Caption
+RESPONSE: Caption                     
+SAMSUNG MZALQ256HAJD-000L2  
+SAMSUNG MZVLQ512HBLU-00BH1  
+
+

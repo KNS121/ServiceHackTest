@@ -1,0 +1,1 @@
+powershell.exe /c "(Start-Process -FilePath \"powershell.exe\" -ArgumentList \"-WindowStyle Hidden -NoProfile -NonInteractive\" -PassThru).Id"

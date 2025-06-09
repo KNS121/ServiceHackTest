@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hosts Management</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">Batch Manager</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Batch Commands</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/hosts">Hosts Management</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container py-4">
+        <h1 class="text-center mb-4">Hosts Management</h1>
+
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        Add New Host
+                    </div>
+                    <div class="card-body">
+                        <form id="addHostForm">
+                            <div class="mb-3">
+                                <label for="hostIP" class="form-label">IP Address</label>
+                                <input type="text" class="form-control" id="hostIP" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="hostName" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="hostName">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Add Host</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        Hosts List
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>Last Checked</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hostsTableBody">
+                                <!-- Hosts will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/hosts.js"></script>
+</body>
+</html>

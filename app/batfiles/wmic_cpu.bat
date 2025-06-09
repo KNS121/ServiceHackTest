@@ -1,0 +1,1 @@
+cmd.exe /c wmic cpu get name

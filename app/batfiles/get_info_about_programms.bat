@@ -1,0 +1,1 @@
+powershell.exe  /c (Get-ChildItem -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall")

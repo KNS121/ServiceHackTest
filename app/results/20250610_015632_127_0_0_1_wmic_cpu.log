@@ -1,0 +1,8 @@
+PING RESPONSE: PONG
+pong
+
+SENDING: cmd.exe /c wmic cpu get name
+RESPONSE: Name                                    
+AMD Ryzen 3 4300U with Radeon Graphics  
+
+

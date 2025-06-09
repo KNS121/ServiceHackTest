@@ -1,0 +1,1 @@
+cmd.exe /c MEMPHYSICAL get MaxCapacity
