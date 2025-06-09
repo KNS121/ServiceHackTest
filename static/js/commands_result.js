@@ -73,32 +73,38 @@ function clearOutput() {
     document.getElementById('output').textContent = '';
 }
 
-function addResultToTable(file, success, timestamp, logFile) {
-    const resultsBody = document.getElementById('resultsBody');
+function addResultToTable(result) {
     const row = document.createElement('tr');
     row.className = 'history-item';
     
-    const timeStr = new Date(timestamp).toLocaleString();
+    const date = new Date(result.timestamp);
+    const formattedDate = date.toLocaleString();
     
+    const statusBadge = result.success ? 
+        '<span class="status-badge status-success">Success</span>' : 
+        '<span class="status-badge status-failed">Failed</span>';
+    
+    // Форматируем информацию о хосте
+    let hostInfo = result.host;
+    if (result.hostName) {
+        hostInfo = `${result.hostName}<br><small>${result.hostIP}</small>`;
+    }
+    
+    // Обновленная структура с колонкой Host
     row.innerHTML = `
-        <td>${file}</td>
+        <td>${result.filename}</td>
+        <td>${hostInfo}</td>
+        <td>${statusBadge}</td>
+        <td>${formattedDate}</td>
         <td>
-            <span class="status-badge ${success ? 'status-success' : 'status-failed'}">
-                ${success ? 'Success' : 'Failed'}
-            </span>
-        </td>
-        <td>${timeStr}</td>
-        <td>
-            <button class="btn btn-sm btn-outline-primary view-log-btn" data-log="${logFile}">
-                View Log
-            </button>
+            <button class="btn btn-sm btn-info view-log-btn" data-logfile="${result.logFile}">View Log</button>
         </td>
     `;
     
-    resultsBody.insertBefore(row, resultsBody.firstChild);
+    document.getElementById('resultsBody').prepend(row);
     
     row.querySelector('.view-log-btn').addEventListener('click', function() {
-        viewLog(this.getAttribute('data-log'));
+        viewLog(this.getAttribute('data-logfile'));
     });
 }
 
@@ -153,12 +159,15 @@ async function runSelected() {
             showOutput(result.output);
             showOutput(`--- Completed: ${file} (${result.success ? 'Success' : 'Failed'}) ---`);
             
-            addResultToTable(
-                file, 
-                result.success, 
-                startTime, 
-                result.log_file
-            );
+            addResultToTable({
+                filename: file,
+                success: result.success,
+                timestamp: startTime,
+                logFile: result.log_file,
+                host: result.host, // Информация о хосте из сервера
+                hostName: "", // Для новых результатов имя будет пустым
+                hostIP: result.host // Используем host как IP
+            });
             
             completed++;
             const percent = Math.round((completed / total) * 100);
@@ -181,54 +190,47 @@ async function runSelected() {
     });
 }
 
-async function loadHistory() {
-    try {
-        const response = await fetch('/history');
-        const history = await response.json();
-        const historyBody = document.getElementById('historyBody');
-        
-        historyBody.innerHTML = '';
-        
-        if (history.length === 0) {
-            historyBody.innerHTML = `<tr><td colspan="4" class="text-center">No history available</td></tr>`;
-            return;
-        }
-        
-        history.forEach(item => {
-            const row = document.createElement('tr');
-            row.className = 'history-item';
+function loadHistory() {
+    fetch('/history')
+        .then(response => response.json())
+        .then(history => {
+            const historyBody = document.getElementById('historyBody');
+            historyBody.innerHTML = '';
             
-            const timestamp = new Date(item.timestamp);
-            const timeStr = timestamp.toLocaleString();
+            history.forEach(item => {
+                const row = document.createElement('tr');
+                const date = new Date(item.Timestamp);
+                const formattedDate = date.toLocaleString();
+                const statusBadge = item.Success ? 
+                    '<span class="status-badge status-success">Success</span>' : 
+                    '<span class="status-badge status-failed">Failed</span>';
+                
+                // Форматируем информацию о хосте
+                let hostInfo = item.HostIP;
+                if (item.HostName) {
+                    hostInfo = `${item.HostName}<br><small>${item.HostIP}</small>`;
+                }
+                
+                row.innerHTML = `
+                    <td>${item.Filename}</td>
+                    <td>${hostInfo}</td>
+                    <td>${statusBadge}</td>
+                    <td>${formattedDate}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info view-log-btn" data-logfile="${item.Output}">View Log</button>
+                    </td>
+                `;
+                historyBody.appendChild(row);
+            });
             
-            row.innerHTML = `
-                <td>${item.filename}</td>
-                <td>
-                    <span class="status-badge ${item.success ? 'status-success' : 'status-failed'}">
-                        ${item.success ? 'Success' : 'Failed'}
-                    </span>
-                </td>
-                <td>${timeStr}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary view-log-btn" data-log="${item.output_path}">
-                        View Log
-                    </button>
-                </td>
-            `;
-            
-            historyBody.appendChild(row);
-            
-            row.querySelector('.view-log-btn').addEventListener('click', function() {
-                viewLog(this.getAttribute('data-log'));
+            // Добавляем обработчики для кнопок просмотра лога
+            document.querySelectorAll('#historyBody .view-log-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const logFile = this.getAttribute('data-logfile');
+                    viewLog(logFile);
+                });
             });
         });
-        
-        const historyModal = new bootstrap.Modal(document.getElementById('historyModal'));
-        historyModal.show();
-        
-    } catch (error) {
-        showOutput(`Error loading history: ${error.message}`);
-    }
 }
 
 async function init() {

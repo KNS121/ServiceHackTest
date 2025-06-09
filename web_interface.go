@@ -205,7 +205,9 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 
     // Save result to file
     timestamp := time.Now().Format("20060102_150405")
-    resultFilename := fmt.Sprintf("%s_%s.log", timestamp, strings.TrimSuffix(file, ".bat"))
+    safeHost := strings.ReplaceAll(host, ".", "_")
+    safeHost = strings.ReplaceAll(safeHost, ":", "_")
+    resultFilename := fmt.Sprintf("%s_%s_%s.log", timestamp, safeHost, strings.TrimSuffix(file, ".bat"))
     resultPath := filepath.Join("results", resultFilename)
     
     if err := os.WriteFile(resultPath, []byte(output), 0644); err != nil {
@@ -226,6 +228,7 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
         "success": success,
         "output":  output,
         "log_file": resultFilename,
+        "host":    host, // Добавляем информацию о хосте
     })
 }
 
