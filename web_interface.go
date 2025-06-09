@@ -51,11 +51,21 @@ type RunResult struct {
 	Timestamp time.Time
 }
 
+type Host struct {
+    ID         int        `json:"id"`
+    IPAddress  string     `json:"ip_address"`
+    Name       string     `json:"name"`
+    Status     string     `json:"status"`
+    LastChecked *time.Time `json:"last_checked"`
+}
+
 var db *sql.DB
 
 func main() {
 	initDB()
 	defer db.Close()
+
+    startHostMonitor()
 
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/run", runHandler)
@@ -117,21 +127,19 @@ func initDB() {
 		log.Fatal("Failed to create table:", err)
 	}
 
-
-	_, err = db.Exec(`
+    _, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS hosts (
         id SERIAL PRIMARY KEY,
         ip_address TEXT NOT NULL,
         name TEXT,
-        status TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        status TEXT DEFAULT 'unknown',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_checked TIMESTAMP
     )
-	`)
+    `)
 	if err != nil {
     	log.Fatal("Failed to create hosts table:", err)
 	}
-
-
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -174,23 +182,23 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Access-Control-Allow-Origin", "*")
-    w.Header().Set("Content-Type", "application/json") // Добавьте это
+    w.Header().Set("Content-Type", "application/json")
 
     file := r.URL.Query().Get("file")
+    host := r.URL.Query().Get("host")
+
     if file == "" {
-        // Возвращаем JSON вместо HTML
         w.WriteHeader(http.StatusBadRequest)
         json.NewEncoder(w).Encode(map[string]string{"error": "Missing file parameter"})
         return
     }
 
-    output, success, err := RunBatFile(filepath.Join("batfiles", file))
+    output, success, err := RunBatFile(filepath.Join("batfiles", file), host)
     if err != nil {
-        // Возвращаем JSON вместо HTML
         w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]string{
+        json.NewEncoder(w).Encode(map[string]interface{}{
             "error": "Error: " + err.Error(),
-            "success": "false",
+            "success": false,
         })
         return
     }
@@ -237,64 +245,65 @@ func getBatFiles(dir string) ([]BatFile, error) {
 	return batFiles, nil
 }
 
-func RunBatFile(filePath string) (string, bool, error) {
-	
-	
-	
-	var output strings.Builder
-	success := true // Assume success until error
+func RunBatFile(filePath, host string) (string, bool, error) {
+    // Проверяем доступность хоста перед выполнением
+    if !pingHost(host) {
+        return "", false, fmt.Errorf("host %s is unreachable", host)
+    }
 
-	log.Printf("Running bat file: %s", filePath)
+    conn, err := net.Dial("tcp", fmt.Sprintf("%s:4545", host))
+    if err != nil {
+        return "", false, fmt.Errorf("connection error: %w", err)
+    }
+    defer conn.Close()
 
-	conn, err := net.Dial("tcp", "localhost:4545")
-	if err != nil {
-		return "", false, fmt.Errorf("connection error: %w", err)
-	}
-	defer conn.Close()
+    conn.SetDeadline(time.Now().Add(10 * time.Second))
 
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+    // Ping server
+    if _, err := conn.Write([]byte("ping\n")); err != nil {
+        return "", false, fmt.Errorf("ping error: %w", err)
+    }
 
-	// Ping server
-	if _, err := conn.Write([]byte("ping\n")); err != nil {
-		return "", false, fmt.Errorf("ping error: %w", err)
-	}
+    pingResp, err := readFullResponse(conn)
+    if err != nil {
+        return "", false, fmt.Errorf("ping read error: %w", err)
+    }
+    
+    var output strings.Builder
+    output.WriteString("PING RESPONSE: " + pingResp + "\n")
+    
+    success := true
 
-	pingResp, err := readFullResponse(conn)
-	if err != nil {
-		return "", false, fmt.Errorf("ping read error: %w", err)
-	}
-	output.WriteString("PING RESPONSE: " + pingResp + "\n")
+    // Open bat file
+    file, err := os.Open(filePath)
+    if err != nil {
+        return "", false, fmt.Errorf("file open error: %w", err)
+    }
+    defer file.Close()
 
-	// Open bat file
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", false, fmt.Errorf("file open error: %w", err)
-	}
-	defer file.Close()
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        cmd := scanner.Text()
+        output.WriteString("SENDING: " + cmd + "\n")
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		cmd := scanner.Text()
-		output.WriteString("SENDING: " + cmd + "\n")
+        if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
+            return output.String(), false, fmt.Errorf("command send error: %w", err)
+        }
 
-		if _, err := conn.Write([]byte(cmd + "\n")); err != nil {
-			return output.String(), false, fmt.Errorf("command send error: %w", err)
-		}
+        resp, err := readFullResponse(conn)
+        if err != nil {
+            return output.String(), false, fmt.Errorf("response error: %w", err)
+        }
+        
+        output.WriteString("RESPONSE: " + resp + "\n")
+        
+        // Check for error in response
+        if strings.Contains(resp, "Error executing command") {
+            success = false
+        }
+    }
 
-		resp, err := readFullResponse(conn)
-		if err != nil {
-			return output.String(), false, fmt.Errorf("response error: %w", err)
-		}
-		
-		output.WriteString("RESPONSE: " + resp + "\n")
-		
-		// Check for error in response
-		if strings.Contains(resp, "Error executing command") {
-			success = false
-		}
-	}
-
-	return output.String(), success, nil
+    return output.String(), success, nil
 }
 
 func historyHandler(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +366,6 @@ func readFullResponse(conn net.Conn) (string, error) {
 	return sb.String(), nil
 }
 
-
 func hostsHandler(w http.ResponseWriter, r *http.Request) {
     tmpl, err := template.ParseFS(templatesFS, "templates/hosts.html")
     if err != nil {
@@ -374,30 +382,19 @@ func hostsHandler(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-
 func listHostsHandler(w http.ResponseWriter, r *http.Request) {
-    rows, err := db.Query("SELECT id, ip_address, name, status FROM hosts ORDER BY created_at DESC")
+    rows, err := db.Query("SELECT id, ip_address, name, status, last_checked FROM hosts ORDER BY created_at DESC")
     if err != nil {
         http.Error(w, "DB error: "+err.Error(), http.StatusInternalServerError)
         return
     }
     defer rows.Close()
 
-    var hosts []struct {
-        ID        int    `json:"id"`
-        IPAddress string `json:"ip_address"`
-        Name      string `json:"name"`
-        Status    string `json:"status"`
-    }
+    var hosts []Host
 
     for rows.Next() {
-        var h struct {
-            ID        int    `json:"id"`
-            IPAddress string `json:"ip_address"`
-            Name      string `json:"name"`
-            Status    string `json:"status"`
-        }
-        if err := rows.Scan(&h.ID, &h.IPAddress, &h.Name, &h.Status); err != nil {
+        var h Host
+        if err := rows.Scan(&h.ID, &h.IPAddress, &h.Name, &h.Status, &h.LastChecked); err != nil {
             log.Printf("Error scanning host row: %v", err)
             continue
         }
@@ -421,7 +418,7 @@ func addHostHandler(w http.ResponseWriter, r *http.Request) {
 
     _, err := db.Exec(
         "INSERT INTO hosts (ip_address, name, status) VALUES ($1, $2, $3)",
-        host.IPAddress, host.Name, "active",
+        host.IPAddress, host.Name, "inactive",
     )
     if err != nil {
         http.Error(w, "Failed to add host: "+err.Error(), http.StatusInternalServerError)
@@ -445,4 +442,75 @@ func deleteHostHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     w.WriteHeader(http.StatusOK)
+}
+
+func pingHost(host string) bool {
+    timeout := 2 * time.Second
+    
+    // Добавляем проверку для localhost
+    if host == "localhost" || host == "127.0.0.1" {
+        host = "localhost"
+    }
+    
+    conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:4545", host), timeout)
+    if err != nil {
+        return false
+    }
+    defer conn.Close()
+    
+    // Отправляем команду ping и проверяем ответ
+    if _, err := conn.Write([]byte("ping\n")); err != nil {
+        return false
+    }
+
+    // Читаем ответ с таймаутом
+    conn.SetReadDeadline(time.Now().Add(timeout))
+    response := make([]byte, 1024)
+    n, err := conn.Read(response)
+    if err != nil {
+        return false
+    }
+
+    // Проверяем наличие подтверждения в ответе
+    return strings.Contains(string(response[:n]), "PONG")
+}
+
+func startHostMonitor() {
+    ticker := time.NewTicker(3 * time.Second)
+    go func() {
+        for range ticker.C {
+            rows, err := db.Query("SELECT id, ip_address FROM hosts")
+            if err != nil {
+                log.Printf("Host monitor query error: %v", err)
+                continue
+            }
+            
+            for rows.Next() {
+                var id int
+                var ip string
+                if err := rows.Scan(&id, &ip); err != nil {
+                    log.Printf("Host scan error: %v", err)
+                    continue
+                }
+                
+                status := "inactive"
+                if pingHost(ip) {
+                    status = "active"
+                }
+                
+                // Обновляем статус и время проверки
+                _, err := db.Exec(
+                    "UPDATE hosts SET status = $1, last_checked = CURRENT_TIMESTAMP WHERE id = $2",
+                    status, id,
+                )
+                if err != nil {
+                    log.Printf("Host update error: %v", err)
+                }
+            }
+            
+            if err := rows.Close(); err != nil {
+                log.Printf("Error closing rows: %v", err)
+            }
+        }
+    }()
 }

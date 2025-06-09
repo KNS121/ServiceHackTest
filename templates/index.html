@@ -64,6 +64,15 @@
         
         <div class="d-flex justify-content-between mb-3">
             <button id="selectAllBtn" class="btn btn-outline-primary">Select All</button>
+
+                <div class="col-md-3 mb-3">
+                    <label for="hostSelect" class="form-label">Target Host:</label>
+                    <select class="form-select" id="hostSelect">
+                    <option value="localhost">localhost</option>
+            <!-- Хосты будут добавлены динамически -->
+                    </select>
+                </div>
+
             <button id="runSelectedBtn" class="btn btn-success">Run Selected</button>
             <button id="historyBtn" class="btn btn-info">Show History</button>
         </div>

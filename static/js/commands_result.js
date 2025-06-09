@@ -116,6 +116,11 @@ async function viewLog(logFile) {
 }
 
 async function runSelected() {
+
+    const hostSelect = document.getElementById('hostSelect');
+    const selectedHost = hostSelect.value;
+
+
     if (selectedFiles.length === 0) {
         showOutput("No files selected!");
         return;
@@ -136,7 +141,8 @@ async function runSelected() {
             showOutput(`--- Starting: ${file} ---`);
             
             const startTime = new Date();
-            const response = await fetch(`/run?file=${encodeURIComponent(file)}`);
+            const response = await fetch(
+            `/run?file=${encodeURIComponent(file)}&host=${encodeURIComponent(selectedHost)}`)
             const result = await response.json();
             
             showOutput(result.output);
@@ -221,6 +227,10 @@ async function loadHistory() {
 }
 
 async function init() {
+    // Загрузка хостов при инициализации
+    await loadHosts();
+    setInterval(loadHosts, 30000);
+
     try {
         const files = await loadBatFiles();
         const container = document.getElementById('batContainer');
@@ -249,6 +259,54 @@ async function init() {
         
     } catch (error) {
         showOutput(`Initialization error: ${error.message}`);
+    }
+}
+
+
+async function loadHosts() {
+    try {
+        const response = await fetch('/hosts/list');
+        const hosts = await response.json();
+        const hostSelect = document.getElementById('hostSelect');
+        
+        // Очищаем только динамические опции
+        const staticOptions = hostSelect.querySelectorAll('option[value="localhost"]');
+        const optionsToRemove = Array.from(hostSelect.options).filter(opt => 
+            !Array.from(staticOptions).includes(opt)
+        );
+        
+        optionsToRemove.forEach(opt => opt.remove());
+        
+        hosts.forEach(host => {
+            // Проверяем, не добавлен ли уже хост
+            const exists = Array.from(hostSelect.options).some(
+                opt => opt.value === host.ip_address
+            );
+            
+            if (!exists) {
+                const option = document.createElement('option');
+                option.value = host.ip_address;
+                
+                // Добавляем иконку статуса
+                const statusIcon = host.status === 'active' ? '🟢' : '🔴';
+                option.textContent = `${statusIcon} ${host.name} (${host.ip_address})`;
+                hostSelect.appendChild(option);
+            }
+        });
+        
+        // Обновляем текст существующих опций
+        Array.from(hostSelect.options).forEach(option => {
+            if (option.value !== 'localhost') {
+                const host = hosts.find(h => h.ip_address === option.value);
+                if (host) {
+                    const statusIcon = host.status === 'active' ? '🟢' : '🔴';
+                    option.textContent = `${statusIcon} ${host.name} (${host.ip_address})`;
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error loading hosts:', error);
+        showOutput(`Host load error: ${error.message}`);
     }
 }
 

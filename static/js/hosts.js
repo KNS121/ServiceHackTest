@@ -1,23 +1,38 @@
 async function loadHosts() {
     try {
         const response = await fetch('/hosts/list');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const hosts = await response.json();
-        const hostsBody = document.getElementById('hostsBody');
+        const hostsBody = document.getElementById('hostsTableBody');
 
         hostsBody.innerHTML = '';
 
         if (hosts.length === 0) {
-            hostsBody.innerHTML = `<tr><td colspan="4" class="text-center">No hosts available</td></tr>`;
+            hostsBody.innerHTML = `<tr><td colspan="5" class="text-center">No hosts available</td></tr>`;
             return;
         }
 
         hosts.forEach(host => {
             const row = document.createElement('tr');
+            
+            // Форматируем время последней проверки
+            let lastChecked = 'Never';
+            if (host.last_checked) {
+                const date = new Date(host.last_checked);
+                lastChecked = date.toLocaleString();
+            }
 
+            // Добавляем иконку статуса
+            const statusIcon = host.status === 'active' ? '🟢' : '🔴';
+            
             row.innerHTML = `
                 <td>${host.ip_address}</td>
                 <td>${host.name}</td>
-                <td>${host.status}</td>
+                <td>${statusIcon} ${host.status}</td>
+                <td>${lastChecked}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-danger delete-host-btn" data-id="${host.id}">
                         Delete
@@ -34,6 +49,14 @@ async function loadHosts() {
 
     } catch (error) {
         console.error('Error loading hosts:', error);
+        const hostsBody = document.getElementById('hostsTableBody');
+        hostsBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger">
+                    Error loading hosts: ${error.message}
+                </td>
+            </tr>
+        `;
     }
 }
 
@@ -82,4 +105,12 @@ document.getElementById('addHostForm').addEventListener('submit', function(e) {
     addHost();
 });
 
-window.onload = loadHosts;
+
+
+window.onload = function() {
+    loadHosts();
+    document.getElementById('addHostForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        addHost();
+    });
+};
