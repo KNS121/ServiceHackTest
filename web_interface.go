@@ -445,34 +445,46 @@ func deleteHostHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func pingHost(host string) bool {
-    timeout := 2 * time.Second
-    
-    // Добавляем проверку для localhost
-    if host == "localhost" || host == "127.0.0.1" {
-        host = "localhost"
+    // Особый случай для localhost
+    if host == "localhost" {
+        host = "127.0.0.1"
     }
     
-    conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:4545", host), timeout)
+    timeout := 2 * time.Second
+    address := fmt.Sprintf("%s:4545", host)
+    
+    // Увеличим логирование для диагностики
+    log.Printf("Pinging host: %s", address)
+    
+    conn, err := net.DialTimeout("tcp", address, timeout)
     if err != nil {
+        log.Printf("Ping failed for %s: %v", address, err)
         return false
     }
     defer conn.Close()
     
-    // Отправляем команду ping и проверяем ответ
+    // Установим общий таймаут
+    conn.SetDeadline(time.Now().Add(timeout))
+    
+    // Отправляем ping
     if _, err := conn.Write([]byte("ping\n")); err != nil {
+        log.Printf("Ping send error to %s: %v", address, err)
         return false
     }
-
-    // Читаем ответ с таймаутом
-    conn.SetReadDeadline(time.Now().Add(timeout))
+    
+    // Читаем ответ
     response := make([]byte, 1024)
     n, err := conn.Read(response)
     if err != nil {
+        log.Printf("Ping read error from %s: %v", address, err)
         return false
     }
-
-    // Проверяем наличие подтверждения в ответе
-    return strings.Contains(string(response[:n]), "PONG")
+    
+    respStr := strings.TrimSpace(string(response[:n]))
+    log.Printf("Ping response from %s: %s", address, respStr)
+    
+    // Проверяем ответ
+    return strings.Contains(respStr, "PONG")
 }
 
 func startHostMonitor() {
@@ -485,6 +497,11 @@ func startHostMonitor() {
                 continue
             }
             
+            var hosts []struct {
+                ID  int
+                IP  string
+            }
+            
             for rows.Next() {
                 var id int
                 var ip string
@@ -492,24 +509,25 @@ func startHostMonitor() {
                     log.Printf("Host scan error: %v", err)
                     continue
                 }
-                
+                hosts = append(hosts, struct{ID int; IP string}{id, ip})
+            }
+            rows.Close()
+            
+            for _, host := range hosts {
                 status := "inactive"
-                if pingHost(ip) {
+                if pingHost(host.IP) {
                     status = "active"
                 }
                 
-                // Обновляем статус и время проверки
                 _, err := db.Exec(
                     "UPDATE hosts SET status = $1, last_checked = CURRENT_TIMESTAMP WHERE id = $2",
-                    status, id,
+                    status, host.ID,
                 )
                 if err != nil {
-                    log.Printf("Host update error: %v", err)
+                    log.Printf("Host update error for %s: %v", host.IP, err)
+                } else {
+                    log.Printf("Updated host %s status to %s", host.IP, status)
                 }
-            }
-            
-            if err := rows.Close(); err != nil {
-                log.Printf("Error closing rows: %v", err)
             }
         }
     }()

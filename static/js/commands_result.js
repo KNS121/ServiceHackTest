@@ -269,41 +269,37 @@ async function loadHosts() {
         const hosts = await response.json();
         const hostSelect = document.getElementById('hostSelect');
         
-        // Очищаем только динамические опции
-        const staticOptions = hostSelect.querySelectorAll('option[value="localhost"]');
-        const optionsToRemove = Array.from(hostSelect.options).filter(opt => 
-            !Array.from(staticOptions).includes(opt)
-        );
+        // Сохраняем текущее значение
+        const currentValue = hostSelect.value;
         
-        optionsToRemove.forEach(opt => opt.remove());
+        // Очищаем все опции кроме localhost
+        const optionsToKeep = [];
+        for (let i = 0; i < hostSelect.options.length; i++) {
+            if (hostSelect.options[i].value === "localhost") {
+                optionsToKeep.push(hostSelect.options[i]);
+            }
+        }
         
+        hostSelect.innerHTML = '';
+        optionsToKeep.forEach(opt => hostSelect.appendChild(opt));
+        
+        // Добавляем хосты из базы
         hosts.forEach(host => {
-            // Проверяем, не добавлен ли уже хост
-            const exists = Array.from(hostSelect.options).some(
-                opt => opt.value === host.ip_address
-            );
+            const option = document.createElement('option');
+            option.value = host.ip_address;
             
-            if (!exists) {
-                const option = document.createElement('option');
-                option.value = host.ip_address;
-                
-                // Добавляем иконку статуса
-                const statusIcon = host.status === 'active' ? '🟢' : '🔴';
-                option.textContent = `${statusIcon} ${host.name} (${host.ip_address})`;
-                hostSelect.appendChild(option);
+            // Добавляем статус
+            const status = host.status === 'active' ? '🟢 Active' : '🔴 Inactive';
+            option.textContent = `${host.name} (${host.ip_address}) - ${status}`;
+            
+            // Восстанавливаем выбранное значение
+            if (host.ip_address === currentValue) {
+                option.selected = true;
             }
+            
+            hostSelect.appendChild(option);
         });
         
-        // Обновляем текст существующих опций
-        Array.from(hostSelect.options).forEach(option => {
-            if (option.value !== 'localhost') {
-                const host = hosts.find(h => h.ip_address === option.value);
-                if (host) {
-                    const statusIcon = host.status === 'active' ? '🟢' : '🔴';
-                    option.textContent = `${statusIcon} ${host.name} (${host.ip_address})`;
-                }
-            }
-        });
     } catch (error) {
         console.error('Error loading hosts:', error);
         showOutput(`Host load error: ${error.message}`);
