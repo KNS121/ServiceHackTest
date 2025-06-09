@@ -310,7 +310,19 @@ func RunBatFile(filePath, host string) (string, bool, error) {
 }
 
 func historyHandler(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, filename, success, timestamp, output_path FROM run_history ORDER BY timestamp DESC LIMIT 50")
+	rows, err := db.Query(`
+        SELECT 
+            rh.id, 
+            rh.filename, 
+            rh.success, 
+            rh.timestamp, 
+            rh.output_path,
+            COALESCE(h.name, rh.host) AS host_name, // Используем rh.host если имя отсутствует
+            COALESCE(h.ip_address, rh.host) AS host_ip
+        FROM run_history rh
+        LEFT JOIN hosts h ON rh.host = h.ip_address
+        ORDER BY rh.timestamp DESC
+    `)
 	if err != nil {
 		http.Error(w, "DB error: "+err.Error(), http.StatusInternalServerError)
 		return
