@@ -1,0 +1,1 @@
+cmd.exe /c wmic OS get Caption, OSArchitecture, Version

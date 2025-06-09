@@ -1,0 +1,1 @@
+cmd.exe /c wmic path Win32_VideoController get name, DriverVersion, VideoModeDescription
