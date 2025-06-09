@@ -62,6 +62,11 @@ func main() {
 	http.HandleFunc("/list", listHandler)
 	http.HandleFunc("/history", historyHandler)
 	http.HandleFunc("/result", resultHandler)
+
+	http.HandleFunc("/hosts", hostsHandler)
+	http.HandleFunc("/hosts/list", listHostsHandler)
+	http.HandleFunc("/hosts/add", addHostHandler)
+	http.HandleFunc("/hosts/delete", deleteHostHandler)
 	
 	// Serve static files from embedded FS
 	staticSubFS, _ := fs.Sub(staticFS, "static")
@@ -111,6 +116,22 @@ func initDB() {
 	if err != nil {
 		log.Fatal("Failed to create table:", err)
 	}
+
+
+	_, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS hosts (
+        id SERIAL PRIMARY KEY,
+        ip_address TEXT NOT NULL,
+        name TEXT,
+        status TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+	`)
+	if err != nil {
+    	log.Fatal("Failed to create hosts table:", err)
+	}
+
+
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -334,4 +355,94 @@ func readFullResponse(conn net.Conn) (string, error) {
 	}
 	
 	return sb.String(), nil
+}
+
+
+func hostsHandler(w http.ResponseWriter, r *http.Request) {
+    tmpl, err := template.ParseFS(templatesFS, "templates/hosts.html")
+    if err != nil {
+        http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    data := PageData{
+        Title: "Hosts Management",
+    }
+
+    if err := tmpl.Execute(w, data); err != nil {
+        http.Error(w, "Execution error: "+err.Error(), http.StatusInternalServerError)
+    }
+}
+
+
+func listHostsHandler(w http.ResponseWriter, r *http.Request) {
+    rows, err := db.Query("SELECT id, ip_address, name, status FROM hosts ORDER BY created_at DESC")
+    if err != nil {
+        http.Error(w, "DB error: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    var hosts []struct {
+        ID        int    `json:"id"`
+        IPAddress string `json:"ip_address"`
+        Name      string `json:"name"`
+        Status    string `json:"status"`
+    }
+
+    for rows.Next() {
+        var h struct {
+            ID        int    `json:"id"`
+            IPAddress string `json:"ip_address"`
+            Name      string `json:"name"`
+            Status    string `json:"status"`
+        }
+        if err := rows.Scan(&h.ID, &h.IPAddress, &h.Name, &h.Status); err != nil {
+            log.Printf("Error scanning host row: %v", err)
+            continue
+        }
+        hosts = append(hosts, h)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(hosts)
+}
+
+func addHostHandler(w http.ResponseWriter, r *http.Request) {
+    var host struct {
+        IPAddress string `json:"ip_address"`
+        Name      string `json:"name"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&host); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    _, err := db.Exec(
+        "INSERT INTO hosts (ip_address, name, status) VALUES ($1, $2, $3)",
+        host.IPAddress, host.Name, "active",
+    )
+    if err != nil {
+        http.Error(w, "Failed to add host: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+}
+
+func deleteHostHandler(w http.ResponseWriter, r *http.Request) {
+    id := r.URL.Query().Get("id")
+    if id == "" {
+        http.Error(w, "Missing id parameter", http.StatusBadRequest)
+        return
+    }
+
+    _, err := db.Exec("DELETE FROM hosts WHERE id = $1", id)
+    if err != nil {
+        http.Error(w, "Failed to delete host: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
 }
