@@ -11,7 +11,7 @@ import (
 
 func pingHost(host string) bool {
     if host == "localhost" {
-        host = "127.0.0.1"
+        host = "host.docker.internal"
     }
     
     timeout := 2 * time.Second

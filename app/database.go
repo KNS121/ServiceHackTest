@@ -14,7 +14,7 @@ var db *sql.DB
 
 func initDB() error {
 	var err error
-	connStr := "postgres://postgres:postgres@localhost:5432/batches?sslmode=disable"
+	connStr := "postgres://postgres:postgres@db:5432/batches?sslmode=disable"
 	
 	for i := 0; i < 5; i++ {
 		db, err = sql.Open("postgres", connStr)

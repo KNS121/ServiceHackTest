@@ -65,7 +65,7 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
     safeHost := strings.ReplaceAll(host, ".", "_")
     safeHost = strings.ReplaceAll(safeHost, ":", "_")
     resultFilename := fmt.Sprintf("%s_%s_%s.log", timestamp, safeHost, strings.TrimSuffix(file, ".bat"))
-    resultPath := filepath.Join("results", resultFilename)
+    resultPath := filepath.Join("/app/results", resultFilename)
     
     if err := os.WriteFile(resultPath, []byte(output), 0644); err != nil {
         log.Printf("Failed to save result: %v", err)
