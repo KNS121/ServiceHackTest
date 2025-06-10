@@ -64,14 +64,14 @@ func createTables() error {
 	}
 
 	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS hosts (
-			id SERIAL PRIMARY KEY,
-			ip_address TEXT NOT NULL,
-			name TEXT,
-			status TEXT DEFAULT 'unknown',
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			last_checked TIMESTAMP
-		)
-	`)
+    CREATE TABLE IF NOT EXISTS hosts (
+        id SERIAL PRIMARY KEY,
+        ip_address TEXT NOT NULL UNIQUE,
+        name TEXT,
+        status TEXT DEFAULT 'unknown',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_checked TIMESTAMP
+    )
+`)
 	return err
 }

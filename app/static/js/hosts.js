@@ -63,19 +63,14 @@ async function loadHosts() {
 let formSubmitted = false; // Флаг для отслеживания отправки
 
 async function addHost() {
-    if (formSubmitted) return; // Защита от повторного вызова
-    
-    formSubmitted = true; // Устанавливаем флаг
-    
     const ipAddress = document.getElementById('hostIP').value;
     const name = document.getElementById('hostName').value;
-
-    // Визуальная индикация загрузки
-    const submitBtn = document.querySelector('#addHostForm button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Adding...';
+    const submitBtn = document.getElementById('addHostBtn');
+    
+    // Блокируем кнопку
     submitBtn.disabled = true;
-
+    submitBtn.textContent = "Adding...";
+    
     try {
         const response = await fetch('/hosts/add', {
             method: 'POST',
@@ -83,21 +78,21 @@ async function addHost() {
             body: JSON.stringify({ ip_address: ipAddress, name: name }),
         });
 
-        if (response.ok) {
-            document.getElementById('addHostForm').reset();
-            await loadHosts(); // Ждем обновления списка
-        } else {
-            console.error('Error adding host:', await response.text());
-            alert('Failed to add host. See console for details.');
+        if (!response.ok) {
+            const errorText = await response.text();
+            alert(`Error: ${errorText}`);
+            return;
         }
+        
+        document.getElementById('addHostForm').reset();
+        loadHosts();
     } catch (error) {
         console.error('Error adding host:', error);
-        alert('Network error: ' + error.message);
+        alert('Error adding host');
     } finally {
-        // Восстанавливаем состояние кнопки
-        submitBtn.innerHTML = originalText;
+        // Разблокируем кнопку
         submitBtn.disabled = false;
-        formSubmitted = false; // Сбрасываем флаг
+        submitBtn.textContent = "Add Host";
     }
 }
 
