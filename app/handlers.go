@@ -187,6 +187,9 @@ func listHostsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func addHostHandler(w http.ResponseWriter, r *http.Request) {
+    // Добавим лог для отслеживания запросов
+    log.Println("Received addHost request")
+    
     var host struct {
         IPAddress string `json:"ip_address"`
         Name      string `json:"name"`
@@ -196,17 +199,42 @@ func addHostHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
+    
+    // Логируем полученные данные
+    log.Printf("Adding host: %s (%s)", host.Name, host.IPAddress)
 
-    _, err := db.Exec(
+    // Проверка существования хоста
+    var exists bool
+    err := db.QueryRow(
+        "SELECT EXISTS(SELECT 1 FROM hosts WHERE ip_address = $1)",
+        host.IPAddress,
+    ).Scan(&exists)
+    
+    if err != nil {
+        log.Printf("Host check error: %v", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    
+    if exists {
+        http.Error(w, "Host already exists", http.StatusConflict)
+        return
+    }
+
+    // Выполняем вставку
+    _, err = db.Exec(
         "INSERT INTO hosts (ip_address, name, status) VALUES ($1, $2, $3)",
         host.IPAddress, host.Name, "inactive",
     )
+    
     if err != nil {
+        log.Printf("Host insert error: %v", err)
         http.Error(w, "Failed to add host: "+err.Error(), http.StatusInternalServerError)
         return
     }
 
     w.WriteHeader(http.StatusOK)
+    log.Println("Host added successfully")
 }
 
 func deleteHostHandler(w http.ResponseWriter, r *http.Request) {

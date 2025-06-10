@@ -100,10 +100,10 @@ async function deleteHost(id) {
     }
 }
 
-document.getElementById('addHostForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    addHost();
-});
+// document.getElementById('addHostForm').addEventListener('submit', function(e) {
+//     e.preventDefault();
+//     addHost();
+// });
 
 
 

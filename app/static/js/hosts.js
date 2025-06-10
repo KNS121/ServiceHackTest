@@ -60,29 +60,64 @@ async function loadHosts() {
     }
 }
 
+let formSubmitted = false; // Флаг для отслеживания отправки
+
 async function addHost() {
+    if (formSubmitted) return; // Защита от повторного вызова
+    
+    formSubmitted = true; // Устанавливаем флаг
+    
     const ipAddress = document.getElementById('hostIP').value;
     const name = document.getElementById('hostName').value;
+
+    // Визуальная индикация загрузки
+    const submitBtn = document.querySelector('#addHostForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Adding...';
+    submitBtn.disabled = true;
 
     try {
         const response = await fetch('/hosts/add', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ip_address: ipAddress, name: name }),
         });
 
         if (response.ok) {
             document.getElementById('addHostForm').reset();
-            loadHosts();
+            await loadHosts(); // Ждем обновления списка
         } else {
             console.error('Error adding host:', await response.text());
+            alert('Failed to add host. See console for details.');
         }
     } catch (error) {
         console.error('Error adding host:', error);
+        alert('Network error: ' + error.message);
+    } finally {
+        // Восстанавливаем состояние кнопки
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        formSubmitted = false; // Сбрасываем флаг
     }
 }
+
+window.onload = function() {
+    loadHosts();
+    
+    // Обработчик с защитой от повторной привязки
+    const form = document.getElementById('addHostForm');
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        addHost();
+    });
+    
+    // Дополнительно: предотвращаем дублирующую привязку
+    if (!window.hostsInitialized) {
+        window.hostsInitialized = true;
+    } else {
+        console.warn('Hosts script initialized multiple times!');
+    }
+};
 
 async function deleteHost(id) {
     try {
@@ -100,10 +135,10 @@ async function deleteHost(id) {
     }
 }
 
-document.getElementById('addHostForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    addHost();
-});
+// document.getElementById('addHostForm').addEventListener('submit', function(e) {
+//     e.preventDefault();
+//     addHost();
+// });
 
 
 
