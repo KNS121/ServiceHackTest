@@ -190,48 +190,48 @@ async function runSelected() {
     });
 }
 
-function loadHistory() {
-    fetch('/history')
-        .then(response => response.json())
-        .then(history => {
-            const historyBody = document.getElementById('historyBody');
-            historyBody.innerHTML = '';
+// function loadHistory() {
+//     fetch('/history')
+//         .then(response => response.json())
+//         .then(history => {
+//             const historyBody = document.getElementById('historyBody');
+//             historyBody.innerHTML = '';
             
-            history.forEach(item => {
-                const row = document.createElement('tr');
-                const date = new Date(item.Timestamp);
-                const formattedDate = date.toLocaleString();
-                const statusBadge = item.Success ? 
-                    '<span class="status-badge status-success">Success</span>' : 
-                    '<span class="status-badge status-failed">Failed</span>';
+//             history.forEach(item => {
+//                 const row = document.createElement('tr');
+//                 const date = new Date(item.Timestamp);
+//                 const formattedDate = date.toLocaleString();
+//                 const statusBadge = item.Success ? 
+//                     '<span class="status-badge status-success">Success</span>' : 
+//                     '<span class="status-badge status-failed">Failed</span>';
                 
-                // Форматируем информацию о хосте
-                let hostInfo = item.HostIP;
-                if (item.HostName) {
-                    hostInfo = `${item.HostName}<br><small>${item.HostIP}</small>`;
-                }
+//                 // Форматируем информацию о хосте
+//                 let hostInfo = item.HostIP;
+//                 if (item.HostName) {
+//                     hostInfo = `${item.HostName}<br><small>${item.HostIP}</small>`;
+//                 }
                 
-                row.innerHTML = `
-                    <td>${item.Filename}</td>
-                    <td>${hostInfo}</td>
-                    <td>${statusBadge}</td>
-                    <td>${formattedDate}</td>
-                    <td>
-                        <button class="btn btn-sm btn-info view-log-btn" data-logfile="${item.Output}">View Log</button>
-                    </td>
-                `;
-                historyBody.appendChild(row);
-            });
+//                 row.innerHTML = `
+//                     <td>${item.Filename}</td>
+//                     <td>${hostInfo}</td>
+//                     <td>${statusBadge}</td>
+//                     <td>${formattedDate}</td>
+//                     <td>
+//                         <button class="btn btn-sm btn-info view-log-btn" data-logfile="${item.Output}">View Log</button>
+//                     </td>
+//                 `;
+//                 historyBody.appendChild(row);
+//             });
             
-            // Добавляем обработчики для кнопок просмотра лога
-            document.querySelectorAll('#historyBody .view-log-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const logFile = this.getAttribute('data-logfile');
-                    viewLog(logFile);
-                });
-            });
-        });
-}
+//             // Добавляем обработчики для кнопок просмотра лога
+//             document.querySelectorAll('#historyBody .view-log-btn').forEach(btn => {
+//                 btn.addEventListener('click', function() {
+//                     const logFile = this.getAttribute('data-logfile');
+//                     viewLog(logFile);
+//                 });
+//             });
+//         });
+// }
 
 async function init() {
     // Загрузка хостов при инициализации
@@ -259,7 +259,7 @@ async function init() {
         });
         
         document.getElementById('runSelectedBtn').addEventListener('click', runSelected);
-        document.getElementById('historyBtn').addEventListener('click', loadHistory);
+        //document.getElementById('historyBtn').addEventListener('click', loadHistory);
         document.getElementById('clearOutputBtn').addEventListener('click', clearOutput);
         
         updateRunButton();

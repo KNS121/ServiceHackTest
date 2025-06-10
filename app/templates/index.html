@@ -5,68 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Batch Commands Manager</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .card { 
-            margin-bottom: 20px; 
-            transition: transform 0.2s; 
-            cursor: pointer;
-        }
-        .card:hover { transform: scale(1.02); }
-        .output { 
-            background: #1e1e1e; 
-            color: #d4d4d4; 
-            font-family: monospace; 
-            padding: 15px;
-            border-radius: 5px;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .selected { border: 2px solid #0d6efd !important; }
-        .progress-container {
-            margin: 10px 0;
-            height: 25px;
-        }
-        .status-badge { 
-            padding: 3px 8px; 
-            border-radius: 12px;
-            font-size: 0.8rem;
-            display: inline-block;
-        }
-        .status-success { background-color: #d4edda; color: #155724; }
-        .status-failed { background-color: #f8d7da; color: #721c24; }
-        .history-item { transition: all 0.3s; }
-        .history-item:hover { background-color: #f8f9fa; }
-        .results-table th {
-            background-color: #e9ecef;
-        }
-        .timestamp-col {
-            width: 180px;
-        }
-        .action-col {
-            width: 120px;
-        }
-        .log-modal .modal-content {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-        }
-        .log-modal .modal-header {
-            border-bottom: 1px solid #444;
-        }
-        .log-modal .btn-close {
-            filter: invert(1);
-        }
-
-        option:disabled {
-            color: #999;
-            background-color: #f8f9fa;
-        }
-    </style>
+    <link href="/static/css/commands.css" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="#">Batch Manager</a>
+            <a class="navbar-brand" href="#">Service Hack</a>
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
@@ -80,7 +24,7 @@
         </div>
     </nav>
     <div class="container py-4">
-        <h1 class="text-center mb-4">Batch Commands Manager</h1>
+        <h1 class="text-center mb-4">Service Hack</h1>
         
         <div class="d-flex justify-content-between mb-3">
             <button id="selectAllBtn" class="btn btn-outline-primary">Select All</button>
@@ -94,7 +38,6 @@
                 </div>
 
             <button id="runSelectedBtn" class="btn btn-success">Run Selected</button>
-            <button id="historyBtn" class="btn btn-info">Show History</button>
         </div>
         
         <div class="row" id="batContainer">

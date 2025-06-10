@@ -1,8 +1,0 @@
-PING RESPONSE: PONG
-pong
-
-SENDING: cmd.exe /c wmic baseboard get product
-RESPONSE: Product      
-LNVNB161216  
-
-
